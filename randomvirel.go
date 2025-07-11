@@ -83,6 +83,10 @@ func PowHashArbitrarySeed(seed, data []byte) [32]byte {
 				if thread != nil {
 					DestroyVM(thread)
 				}
+			}
+
+			for i := 0; i < globNumThreads; i++ {
+				var thread VM
 				if hash_fullmode {
 					thread, err = CreateVM(globCache, globDataset, flags)
 					if err != nil {
