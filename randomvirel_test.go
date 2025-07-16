@@ -3,6 +3,7 @@ package randomvirel
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"runtime"
 	"testing"
 )
@@ -74,6 +75,28 @@ func TestMain(t *testing.T) {
 		if !bytes.Equal(hash[:], hashCorrect) {
 			t.Fatalf("full mode: incorrect hash: expected %x, got %x", hashCorrect, hash)
 		}
+	}
+}
+
+func TestReuse(t *testing.T) {
+	InitHash(len(tests), false)
+
+	doneChan := make(chan bool)
+
+	for _, z := range tests {
+		tp := z
+		go func() {
+			h := PowHashArbitrarySeed(tp[0], tp[1])
+			if !bytes.Equal(h[:], tp[2]) {
+				panic(fmt.Errorf("seed %s: got hash %x, expected %x", tp[0], h, tp[2]))
+			}
+
+			doneChan <- true
+		}()
+	}
+
+	for i := 0; i < len(tests); i++ {
+		<-doneChan
 	}
 }
 

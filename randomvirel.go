@@ -2,6 +2,7 @@ package randomvirel
 
 import (
 	"bytes"
+	"fmt"
 	"sync"
 )
 
@@ -56,51 +57,7 @@ func PowHashArbitrarySeed(seed, data []byte) [32]byte {
 		defer globMut.Unlock()
 
 		if !bytes.Equal(globSeed, seed) || globCache == nil {
-			var err error
-			var shouldAlloc bool = globCache == nil
-
-			if shouldAlloc {
-				globCache, err = AllocCache(flags)
-				if err != nil {
-					panic(err)
-				}
-			}
-			InitCache(globCache, seed[:])
-
-			if hash_fullmode {
-				if shouldAlloc {
-					globDataset, err = AllocDataset(flags)
-					if err != nil {
-						panic(err)
-					}
-				}
-				InitDatasetMultithread(globDataset, globCache, uint64(globNumThreads))
-			}
-			globSeed = seed
-
-			for i := 0; i < globNumThreads; i++ {
-				thread := <-threads
-				if thread != nil {
-					DestroyVM(thread)
-				}
-			}
-
-			for i := 0; i < globNumThreads; i++ {
-				var thread VM
-				if hash_fullmode {
-					thread, err = CreateVM(globCache, globDataset, flags)
-					if err != nil {
-						panic(err)
-					}
-				} else {
-					thread, err = CreateLightVM(globCache, flags)
-					if err != nil {
-						panic(err)
-					}
-				}
-				threads <- thread
-			}
-			curVM = <-threads
+			curVM = updateSeed(seed)
 		} else {
 			curVM = <-threads
 		}
@@ -109,4 +66,62 @@ func PowHashArbitrarySeed(seed, data []byte) [32]byte {
 	h := CalculateHash(curVM, data)
 	threads <- curVM
 	return h
+}
+
+func updateSeed(seed []byte) VM {
+	globSeed = seed
+
+	var err error
+	var shouldAlloc bool = globCache == nil
+
+	var vms = make([]VM, globNumThreads)
+	for i := 0; i < globNumThreads; i++ {
+		vm := <-threads
+		vms[i] = vm
+	}
+
+	if shouldAlloc {
+		globCache, err = AllocCache(flags)
+		if err != nil {
+			panic(err)
+		}
+	}
+	InitCache(globCache, seed[:])
+
+	if hash_fullmode {
+		if shouldAlloc {
+			globDataset, err = AllocDataset(flags)
+			if err != nil {
+				panic(err)
+			}
+		}
+		InitDatasetMultithread(globDataset, globCache, uint64(globNumThreads))
+	}
+
+	for i := 0; i < globNumThreads; i++ {
+		vm := vms[i]
+		if vm == nil {
+			if hash_fullmode {
+				vm, err = CreateVM(globCache, globDataset, flags)
+				if err != nil {
+					panic(err)
+				}
+			} else {
+				vm, err = CreateLightVM(globCache, flags)
+				if err != nil {
+					panic(err)
+				}
+			}
+		}
+		fmt.Println("reinit vm", i, vm, "seed", string(seed))
+		SetVMCache(vm, globCache)
+		if hash_fullmode {
+			SetVMDataset(vm, globDataset)
+		}
+		vms[i] = vm
+	}
+	for _, v := range vms {
+		threads <- v
+	}
+	return <-threads
 }
