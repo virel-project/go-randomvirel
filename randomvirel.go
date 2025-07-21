@@ -2,7 +2,6 @@ package randomvirel
 
 import (
 	"bytes"
-	"fmt"
 	"sync"
 )
 
@@ -113,7 +112,6 @@ func updateSeed(seed []byte) VM {
 				}
 			}
 		}
-		fmt.Println("reinit vm", i, vm, "seed", string(seed))
 		SetVMCache(vm, globCache)
 		if hash_fullmode {
 			SetVMDataset(vm, globDataset)
